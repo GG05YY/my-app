@@ -1,0 +1,342 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #fbfbfd;
+  --foreground: #1d1d1f;
+  --muted: #6e6e73;
+  --accent: #0071e3;
+  --accent-hover: #0077ed;
+  --surface: #ffffff;
+  --surface-elevated: #f5f5f7;
+  --border: rgba(0, 0, 0, 0.08);
+  --glass: rgba(251, 251, 253, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --hero-glow-1: #0071e3;
+  --hero-glow-2: #bf5af2;
+  --hero-glow-3: #30d158;
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #f5f5f7;
+  --muted: #a1a1a6;
+  --accent: #2997ff;
+  --accent-hover: #40a9ff;
+  --surface: #1d1d1f;
+  --surface-elevated: #161617;
+  --border: rgba(255, 255, 255, 0.1);
+  --glass: rgba(0, 0, 0, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --hero-glow-1: #2997ff;
+  --hero-glow-2: #bf5af2;
+  --hero-glow-3: #30d158;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* ── Glass navigation ── */
+.glass-nav {
+  background: var(--glass);
+  border-bottom: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+.glass-nav-scrolled {
+  background: color-mix(in srgb, var(--glass) 90%, transparent);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 8px 32px rgba(0, 0, 0, 0.06);
+}
+
+.dark .glass-nav-scrolled {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Hero mesh gradient ── */
+.hero-mesh {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%, color-mix(in srgb, var(--hero-glow-1) 22%, transparent), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 80% 20%, color-mix(in srgb, var(--hero-glow-2) 18%, transparent), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 50% 80%, color-mix(in srgb, var(--hero-glow-3) 12%, transparent), transparent 55%),
+    var(--background);
+  background-size: 200% 200%;
+  animation: mesh-shift 18s ease-in-out infinite;
+}
+
+@keyframes mesh-shift {
+  0%, 100% { background-position: 0% 0%; }
+  33% { background-position: 100% 50%; }
+  66% { background-position: 50% 100%; }
+}
+
+/* ── Animated gradient text ── */
+.gradient-text {
+  background: linear-gradient(
+    135deg,
+    var(--foreground) 0%,
+    var(--foreground) 40%,
+    var(--accent) 70%,
+    color-mix(in srgb, var(--hero-glow-2) 80%, var(--accent)) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-text-shift 6s ease-in-out infinite;
+}
+
+@keyframes gradient-text-shift {
+  0%, 100% { background-position: 0% center; }
+  50% { background-position: 100% center; }
+}
+
+/* ── Hero entrance animations ── */
+.animate-hero-badge {
+  animation: hero-fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-hero-title {
+  animation: hero-fade-up 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+}
+
+.animate-hero-subtitle {
+  animation: hero-fade-up 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+
+.animate-hero-cta {
+  animation: hero-fade-up 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
+}
+
+.animate-hero-mockup {
+  animation: hero-mockup-in 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.45s both;
+}
+
+@keyframes hero-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hero-mockup-in {
+  from {
+    opacity: 0;
+    transform: translateY(48px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+/* ── Feature cards ── */
+.feature-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition:
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.4s ease,
+    border-color 0.3s ease;
+}
+
+.feature-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 8%, transparent),
+    color-mix(in srgb, var(--hero-glow-2) 6%, transparent),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 20px 40px color-mix(in srgb, var(--accent) 8%, transparent),
+    0 4px 12px rgba(0, 0, 0, 0.06);
+  border-color: color-mix(in srgb, var(--accent) 25%, var(--border));
+}
+
+.feature-card:hover::before {
+  opacity: 1;
+}
+
+.dark .feature-card:hover {
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+/* ── Scroll reveal ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Pricing card glow ── */
+.pricing-highlight {
+  background: linear-gradient(
+    145deg,
+    #1d1d1f 0%,
+    #2d2d30 40%,
+    color-mix(in srgb, var(--accent) 30%, #1d1d1f) 100%
+  );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+    0 24px 48px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.dark .pricing-highlight {
+  background: linear-gradient(
+    145deg,
+    #161617 0%,
+    #1d1d1f 50%,
+    color-mix(in srgb, var(--accent) 25%, #0a0a0a) 100%
+  );
+}
+
+/* ── Gradient border utility ── */
+.gradient-border {
+  position: relative;
+  background: var(--surface);
+  border-radius: 1rem;
+}
+
+.gradient-border::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 50%, transparent),
+    color-mix(in srgb, var(--hero-glow-2) 40%, transparent),
+    color-mix(in srgb, var(--hero-glow-3) 30%, transparent)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Orb glow (hero decoration) ── */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  animation: orb-drift 12s ease-in-out infinite;
+}
+
+.orb-1 {
+  width: 420px;
+  height: 420px;
+  background: color-mix(in srgb, var(--hero-glow-1) 35%, transparent);
+  top: -10%;
+  left: -5%;
+  animation-delay: 0s;
+}
+
+.orb-2 {
+  width: 360px;
+  height: 360px;
+  background: color-mix(in srgb, var(--hero-glow-2) 30%, transparent);
+  top: 5%;
+  right: -8%;
+  animation-delay: -4s;
+}
+
+.orb-3 {
+  width: 280px;
+  height: 280px;
+  background: color-mix(in srgb, var(--hero-glow-3) 25%, transparent);
+  bottom: 10%;
+  left: 30%;
+  animation-delay: -8s;
+}
+
+@keyframes orb-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.05); }
+  66% { transform: translate(-20px, 15px) scale(0.95); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-mesh,
+  .gradient-text,
+  .animate-float,
+  .orb,
+  .animate-hero-badge,
+  .animate-hero-title,
+  .animate-hero-subtitle,
+  .animate-hero-cta,
+  .animate-hero-mockup {
+    animation: none;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
