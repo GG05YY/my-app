@@ -8,16 +8,17 @@ type Message = {
   content: string;
 };
 
-const FAKE_REPLIES = [
-  "That's a great question! In a real app, this would come from an AI API.",
-  "I understand. Let me think about that for a moment…",
-  "Thanks for sharing! Here's a helpful perspective on what you mentioned.",
-  "Interesting point. I'd suggest breaking it down into smaller steps.",
-  "Got it! Feel free to ask anything else — I'm here to help.",
-];
+/** API payload shape: role + content only (no UI id). */
+type ChatHistoryMessage = Pick<Message, "role" | "content">;
 
-function pickFakeReply(): string {
-  return FAKE_REPLIES[Math.floor(Math.random() * FAKE_REPLIES.length)];
+/** Convert in-memory messages into the format POST /api/chat expects. */
+function toApiHistory(messages: Message[]): ChatHistoryMessage[] {
+  return messages
+    .filter((msg) => msg.id !== "welcome")
+    .map(({ role, content }) => ({
+      role,
+      content,
+    }));
 }
 
 export default function ChatPage() {
@@ -37,32 +38,79 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const trimmed = input.trim();
     if (!trimmed || isTyping) return;
 
     const userId = `msg-${nextId.current++}`;
-    setMessages((prev) => [
-      ...prev,
-      { id: userId, role: "user", content: trimmed },
-    ]);
+    const userMessage: Message = {
+      id: userId,
+      role: "user",
+      content: trimmed,
+    };
+
+    // Build full thread from current state + this send (state updates async).
+    const historyForApi = toApiHistory([...messages, userMessage]);
+
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsTyping(true);
+    requestAnimationFrame(scrollToBottom);
 
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Multi-turn: send welcome, prior turns, and the new user message.
+        body: JSON.stringify({ messages: historyForApi }),
+      });
+
+      let data: { reply?: string; error?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        // Response was not JSON — handled below.
+      }
+
+      if (!res.ok || !data.reply) {
+        const errorText =
+          data.error ??
+          (res.ok
+            ? "No reply received from the server."
+            : `Request failed (${res.status}).`);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${nextId.current++}`,
+            role: "assistant",
+            content: `Sorry, something went wrong: ${errorText}`,
+          },
+        ]);
+      } else {
+        const reply = data.reply;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${nextId.current++}`,
+            role: "assistant",
+            content: reply,
+          },
+        ]);
+      }
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
           id: `msg-${nextId.current++}`,
           role: "assistant",
-          content: pickFakeReply(),
+          content:
+            "Sorry, I couldn't reach the server. Please check your connection and try again.",
         },
       ]);
+    } finally {
       setIsTyping(false);
       requestAnimationFrame(scrollToBottom);
-    }, 600);
-
-    requestAnimationFrame(scrollToBottom);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -82,7 +130,7 @@ export default function ChatPage() {
           </div>
           <div>
             <h1 className="text-sm font-semibold tracking-tight sm:text-base">
-              AI Chat
+              GG AI Assistant
             </h1>
             <p className="text-xs text-zinc-500">Always here to help</p>
           </div>
@@ -112,10 +160,13 @@ export default function ChatPage() {
 
             {isTyping && (
               <div className="flex justify-start">
-                <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md border border-white/8 bg-zinc-800/90 px-4 py-3">
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-500 [animation-delay:0ms]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-500 [animation-delay:150ms]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-500 [animation-delay:300ms]" />
+                <div className="flex items-center gap-2.5 rounded-2xl rounded-bl-md border border-white/8 bg-zinc-800/90 px-4 py-2.5 text-sm text-zinc-400 sm:text-[15px]">
+                  <span>AI is typing...</span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:0ms]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:150ms]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:300ms]" />
+                  </span>
                 </div>
               </div>
             )}
