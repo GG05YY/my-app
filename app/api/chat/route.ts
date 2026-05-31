@@ -21,18 +21,8 @@ type ChatRequestBody = {
   messages: ChatHistoryMessage[];
 };
 
-/** Shape of the JSON body this route returns on success. */
-type ChatResponseBody = {
-  reply: string;
-};
-
-/** Minimal typing for the DeepSeek / OpenAI-style completion response. */
-type DeepSeekCompletionResponse = {
-  choices?: Array<{
-    message?: {
-      content?: string | null;
-    };
-  }>;
+/** Minimal typing for the DeepSeek / OpenAI-style error response. */
+type DeepSeekErrorResponse = {
   error?: {
     message?: string;
   };
@@ -52,8 +42,8 @@ function isValidHistoryMessage(value: unknown): value is ChatHistoryMessage {
 /**
  * POST /api/chat
  *
- * Accepts conversation history, calls DeepSeek with the full thread, and returns
- * the assistant reply for the latest turn.
+ * Accepts conversation history, calls DeepSeek with streaming enabled,
+ * and forwards the token stream to the client as text/plain chunked.
  */
 export async function POST(request: NextRequest) {
   // --- API key (server-only env var, never exposed to the browser) ---
@@ -112,22 +102,7 @@ export async function POST(request: NextRequest) {
     content: msg.content.trim(),
   }));
 
-  // --- Call DeepSeek chat completions API ---
-  let deepseekResponse: Response;
-  try {
-    deepseekResponse = await fetch(DEEPSEEK_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: DEEPSEEK_MODEL,
-        messages: [
-          {
-            role: "system",
-            content: `
-你是 GG AI Assistant。
+  const systemPrompt = `你是 GG AI Assistant。
 
 你是一名专业、友好、耐心的 AI 编程助手。
 
@@ -141,13 +116,31 @@ export async function POST(request: NextRequest) {
 - 结构清晰
 - 优先分点
 - 尽量简洁
-- 帮助用户学习编程和 AI 开发
-      `,
-          },
-          ...messages,
-        ],
-        stream: false,
-      }),
+- 帮助用户学习编程和 AI 开发`;
+
+  const deepseekRequestBody = JSON.stringify({
+    model: DEEPSEEK_MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      ...messages,
+    ],
+    stream: true,
+  });
+
+  // AbortSignal that fires when the downstream client disconnects, so we can
+  // cancel the upstream DeepSeek request and avoid wasting tokens.
+  const upstreamAbort = new AbortController();
+
+  let deepseekResponse: Response;
+  try {
+    deepseekResponse = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: deepseekRequestBody,
+      signal: upstreamAbort.signal,
     });
   } catch {
     return NextResponse.json(
@@ -156,38 +149,106 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // --- Parse DeepSeek response ---
-  let data: DeepSeekCompletionResponse;
-  try {
-    data = (await deepseekResponse.json()) as DeepSeekCompletionResponse;
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid response from DeepSeek API." },
-      { status: 502 },
-    );
-  }
-
+  // If DeepSeek returned a non-200, read the error body (JSON) and return it.
   if (!deepseekResponse.ok) {
-    return NextResponse.json(
-      {
-        error:
-          data.error?.message ??
-          `DeepSeek API error (${deepseekResponse.status}).`,
-      },
-      { status: deepseekResponse.status },
-    );
+    let errorMessage = `DeepSeek API error (${deepseekResponse.status}).`;
+    try {
+      const errData = (await deepseekResponse.json()) as DeepSeekErrorResponse;
+      if (errData.error?.message) errorMessage = errData.error.message;
+    } catch {
+      // Body wasn't parseable JSON — stick with the status text.
+    }
+    return NextResponse.json({ error: errorMessage }, { status: deepseekResponse.status });
   }
 
-  // --- Extract assistant text from the first choice ---
-  const reply = data.choices?.[0]?.message?.content?.trim();
-  if (!reply) {
+  if (!deepseekResponse.body) {
     return NextResponse.json(
-      { error: "No reply content returned from DeepSeek." },
+      { error: "No response body from DeepSeek." },
       { status: 502 },
     );
   }
 
-  // --- Success: return { reply } as required ---
-  const responseBody: ChatResponseBody = { reply };
-  return NextResponse.json(responseBody);
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const reader = deepseekResponse.body!.getReader();
+
+      // Buffer for incomplete SSE events that span chunk boundaries.
+      let buffer = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE events are separated by \n\n. Split on that boundary to
+          // ensure each event is complete — a single JSON data line that
+          // was split across chunks will be reassembled in the buffer.
+          const events = buffer.split("\n\n");
+          // The last segment is either an incomplete event or empty;
+          // keep it in the buffer for the next chunk.
+          buffer = events.pop() ?? "";
+
+          for (const event of events) {
+            const lines = event.split("\n");
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+              const payload = trimmed.slice(5).trim();
+
+              if (payload === "[DONE]") {
+                controller.close();
+                return;
+              }
+
+              try {
+                const parsed = JSON.parse(payload);
+
+                if (parsed.error) {
+                  const errMsg =
+                    typeof parsed.error === "string"
+                      ? parsed.error
+                      : parsed.error?.message ?? "Unknown upstream error";
+                  controller.enqueue(encoder.encode(`__ERROR__:${errMsg}`));
+                  controller.close();
+                  return;
+                }
+
+                const delta = parsed.choices?.[0]?.delta?.content;
+                if (delta) {
+                  controller.enqueue(encoder.encode(delta));
+                }
+              } catch {
+                // Malformed JSON in one SSE line — skip it.
+              }
+            }
+          }
+        }
+
+        controller.close();
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Stream read failure";
+        controller.enqueue(encoder.encode(`__ERROR__:${message}`));
+        controller.close();
+      }
+    },
+
+    cancel() {
+      upstreamAbort.abort();
+      deepseekResponse.body?.cancel().catch(() => {});
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache",
+    },
+  });
 }
