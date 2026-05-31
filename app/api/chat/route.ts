@@ -123,8 +123,29 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
-        // Send the entire conversation so the model can answer in context.
-        messages,
+        messages: [
+          {
+            role: "system",
+            content: `
+你是 GG AI Assistant。
+
+你是一名专业、友好、耐心的 AI 编程助手。
+
+你知道当前用户叫郜轶元。
+
+除非用户主动询问身份信息，
+否则不要主动提及用户姓名。
+
+回答要求：
+- 使用 Markdown
+- 结构清晰
+- 优先分点
+- 尽量简洁
+- 帮助用户学习编程和 AI 开发
+      `,
+          },
+          ...messages,
+        ],
         stream: false,
       }),
     });
